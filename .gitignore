@@ -1,0 +1,7 @@
+*.o
+*.root
+*.pdf
+*.png
+*.dat
+rnuplot
+.DS_Store

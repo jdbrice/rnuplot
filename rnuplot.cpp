@@ -7,6 +7,8 @@ using namespace std;
 #include <array>
 #include <sys/stat.h>
 
+#include "root2gnuplot.h"
+
 bool use_cache = true;
 
 std::string exec(const char* cmd) {
@@ -35,10 +37,10 @@ int main(int argc, char** argv)
 
 
 	options.add_options()
-		("c,cache", "Use cached data, set to false to always convert", cxxopts::value<bool>()->default_value("true"))
+		("c,cache", "Use cached data, set to true to use cached data", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
 		("f,file", "File", cxxopts::value<std::string>())
-		("d,debug", "Enable debugging", cxxopts::value<bool>()->default_value("false"))
-		// ("f,foo", "Param foo", cxxopts::value<int>()->default_value("10"))
+		("d,debug", "Enable debugging", cxxopts::value<std::string>())
+		("r,root2gnuplot", "Convert ROOT data using root2gnuplot (useful if not specified in gnuplot script comment", cxxopts::value<std::vector<std::string>>())
 		("h,help", "Print usage")
 	;
 
@@ -52,24 +54,30 @@ int main(int argc, char** argv)
 	  cout << options.help() << endl;
 	  exit(0);
 	}
-	bool debug = result["debug"].as<bool>();
-	string bar;
-	if (result.count("bar"))
-	  bar = result["bar"].as<string>();
-	// int foo = result["foo"].as<int>();
-
+	// bool debug = result["debug"].as<bool>();
+	
 	string file;
 	if (result.count("file"))
 	  file = result["file"].as<string>();
 	cout << "file: " << file << endl;
 
-	if ( result["cache"].as<bool>() == false ){
-		cout << "cache = false" << endl;
-		use_cache = false;
-	}
+    use_cache = result["cache"].as<bool>();
+	if ( use_cache == false ){
+		cout << "Use cache = false" << endl;
+	} else {
+        cout << "Use cache = true" << endl;
+    }
+
+    if ( result.count("root2gnuplot") ){
+        vector<string> convert_lines = result["root2gnuplot"].as<vector<string>>();
+        // apply these first!
+        for ( auto s : convert_lines ){
+            // cout << "-r " << s << endl;
+            process_root2gnuplot_line( "root2gnuplot " + s );
+        }
+    }
 
 	process_file( file );
-	// return 0 ;
 	string gnuplot_cmd = "gnuplot " + file;
 	cout << gnuplot_cmd << endl; 
 	exec( gnuplot_cmd.c_str() );
@@ -96,6 +104,8 @@ void process_file( std::string file ) {
 
 void process_root2gnuplot_line( string line ){
 	std::size_t found = line.find("root2gnuplot");
+    if (found==std::string::npos)
+        return;
 	// strip leading comment char and spaces
 	std::string cmd = line.substr(found);
 	
@@ -103,7 +113,7 @@ void process_root2gnuplot_line( string line ){
 	stringstream opts;
 	string exe, input, output, format;
 	opts << cmd;
-	opts >> exe >> input >> output >> quoted(format);
+	opts >> exe >> quoted(input) >> quoted(output) >> quoted(format);
 
 	bool skip = false;
 
@@ -111,14 +121,15 @@ void process_root2gnuplot_line( string line ){
 		cout << "Checking for cached data in " << output << endl;
 		struct stat buffer;   
 		if (stat (output.c_str(), &buffer) == 0) {
-			cout << "File " << output << " already exists, skipping converison. Use rnuplot --cache=false [FILE] to force conversion" << endl;
+			cout << "File " << output << " already exists, skipping converison." << endl;
 			skip = true;
 		}
 	}
 
 	if ( !skip ){
 		cout << cmd << endl;
-		exec( cmd.c_str() );
+		// exec( cmd.c_str() );
+        root2gnuplot( input.c_str(), output.c_str(), format.c_str(), -1 );
 	}
 	
 }
